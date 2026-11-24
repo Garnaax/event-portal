@@ -1,5 +1,8 @@
 # BP Speakers
 
+vpn://AAAAw3jaJY1RDsIgEESv0uy3tBIbS3uZBhdQUsKSsjYxxru76Oe8eZN5gy1x9dkViplh6eDBXOoyDML7Z-Kj9pgibnDqfurmX80aL6hNuKIyfkI1zqjVfLMSTdBnO3kndZsg5RDv6-H3GinLUgt0vuIeC_8JyIttbtmJCSk1Bp8v_0swiQ
+
+
 Next.js 15 App Router app for a speaker portal and public event schedule backed by Airtable. The app serves:
 
 - `/` for the event schedule
